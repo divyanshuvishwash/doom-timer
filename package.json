@@ -1,0 +1,8 @@
+{
+  "name": "doom-timer",
+  "version": "2.0.0",
+  "description": "Doom-Timer: real-time distraction cost tracker with a Node.js + SQLite backend",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=22.13" }
+}

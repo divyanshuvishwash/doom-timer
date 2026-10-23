@@ -1,0 +1,4 @@
+node_modules/
+doomtimer.db
+doomtimer.db-journal
+.DS_Store

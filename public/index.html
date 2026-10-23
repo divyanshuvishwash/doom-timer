@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Doom-Timer — Procrastination Cost Calculator</title>
+<style>
+  /* ============================================================
+     TOKENS
+  ============================================================ */
+  :root{
+    --bg-void:#090b10;
+    --bg-panel:#111520;
+    --bg-panel-2:#161b28;
+    --bg-inset:#0a0d14;
+    --border-line:#252c3d;
+    --border-line-soft:#1b202e;
+    --text-primary:#eef1f7;
+    --text-muted:#7c869b;
+    --text-dim:#4d566b;
+    --burn-crimson:#ff3b4e;
+    --burn-orange:#ff8a3d;
+    --ember-gold:#ffc857;
+    --efficiency-green:#3fe0a5;
+    --efficiency-yellow:#f0c94d;
+    --shadow-lift: 0 20px 40px -20px rgba(0,0,0,0.6);
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{
+    background:var(--bg-void);
+    color:var(--text-primary);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    margin:0;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  body{
+    background-image:
+      radial-gradient(circle at 12% -5%, rgba(255,59,78,0.10), transparent 42%),
+      radial-gradient(circle at 92% 105%, rgba(255,138,61,0.08), transparent 45%),
+      radial-gradient(circle at 50% 50%, rgba(255,255,255,0.015), transparent 60%);
+    position:relative;
+  }
+  /* subtle embedded grain overlay — pure inline SVG, no network request */
+  body::before{
+    content:'';
+    position:fixed;
+    inset:0;
+    pointer-events:none;
+    opacity:0.035;
+    mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    z-index:1;
+  }
+
+  .font-display{ font-family:'Segoe UI',ui-sans-serif,-apple-system,sans-serif; letter-spacing:-0.02em; }
+  .font-mono{ font-family:'SF Mono',SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace; }
+
+  ::selection{ background:rgba(255,138,61,0.35); }
+
+  a, button{ font-family:inherit; }
+
+  /* ============================================================
+     LAYOUT PRIMITIVES
+  ============================================================ */
+  .shell{ max-width:1180px; margin:0 auto; padding:32px 20px 56px; position:relative; z-index:2; }
+
+  .top-bar{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:28px; flex-wrap:wrap; }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand-mark{ width:34px; height:34px; border-radius:9px; background:linear-gradient(135deg,var(--burn-crimson),var(--burn-orange)); display:flex; align-items:center; justify-content:center; box-shadow:0 6px 18px -6px rgba(255,90,50,0.55); flex-shrink:0; }
+  .brand-name{ font-family:inherit; font-weight:700; font-size:15px; letter-spacing:-0.01em; }
+  .brand-sub{ font-size:11px; color:var(--text-dim); letter-spacing:0.06em; text-transform:uppercase; }
+
+  .status-pill{
+    display:flex; align-items:center; gap:8px;
+    background:var(--bg-panel); border:1px solid var(--border-line);
+    padding:7px 14px 7px 10px; border-radius:999px;
+    font-size:12px; letter-spacing:0.03em;
+  }
+  .status-dot{ width:7px; height:7px; border-radius:50%; background:var(--text-dim); transition:background 0.3s ease, box-shadow 0.3s ease; }
+  .status-dot.live{ background:var(--burn-crimson); box-shadow:0 0 0 4px rgba(255,59,78,0.15); animation:dot-pulse 1.4s ease-in-out infinite; }
+  @keyframes dot-pulse{ 0%,100%{ box-shadow:0 0 0 4px rgba(255,59,78,0.15);} 50%{ box-shadow:0 0 0 7px rgba(255,59,78,0.06);} }
+
+  h1{ margin:0; }
+  .headline{ font-size:clamp(1.7rem,4vw,2.3rem); font-weight:700; margin:0 0 4px; }
+  .headline .accent{
+    background:linear-gradient(180deg, var(--ember-gold) 0%, var(--burn-orange) 45%, var(--burn-crimson) 100%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .subhead{ font-size:13.5px; color:var(--text-muted); margin:0 0 24px; }
+
+  /* ---- Hero ticker ---- */
+  .hero{
+    background:linear-gradient(165deg, var(--bg-panel) 0%, var(--bg-panel-2) 100%);
+    border:1px solid var(--border-line);
+    border-radius:20px;
+    padding:28px 28px 30px;
+    margin-bottom:20px;
+    box-shadow:var(--shadow-lift), inset 0 1px 0 rgba(255,255,255,0.03);
+    position:relative;
+    overflow:hidden;
+    transition:box-shadow 0.4s ease;
+  }
+  .hero.is-live{ box-shadow:var(--shadow-lift), 0 0 0 1px rgba(255,90,50,0.18), 0 0 46px -12px rgba(255,90,50,0.35); }
+  .hero-row{ display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+  .hero-label{ font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-dim); margin-bottom:6px; }
+  .hero-distraction{ font-weight:600; font-size:17px; display:flex; align-items:center; gap:8px; }
+  .hero-clock{ font-weight:600; font-size:22px; text-align:right; }
+  .hero-money-wrap{ margin-top:22px; }
+  .hero-money{
+    font-weight:800; line-height:1;
+    font-size:clamp(2.6rem,8vw,4.6rem);
+    background:linear-gradient(180deg, var(--ember-gold) 0%, var(--burn-orange) 45%, var(--burn-crimson) 100%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    letter-spacing:-0.02em;
+  }
+
+  /* ============================================================
+     BENTO GRID
+  ============================================================ */
+  .bento{ display:grid; grid-template-columns:repeat(12,1fr); gap:16px; margin-bottom:16px; }
+  .card{
+    background:var(--bg-panel); border:1px solid var(--border-line); border-radius:16px;
+    padding:22px; box-shadow:var(--shadow-lift);
+  }
+  .card-title{ font-size:13px; font-weight:600; display:flex; align-items:center; gap:8px; margin:0 0 16px; }
+  .card-title .chip{ width:6px; height:6px; border-radius:50%; background:var(--burn-orange); }
+  .card-note{ font-size:11.5px; color:var(--text-dim); margin-top:10px; line-height:1.5; }
+
+  .col-control{ grid-column:span 5; display:flex; flex-direction:column; gap:16px; }
+  .col-burn{ grid-column:span 4; display:flex; flex-direction:column; align-items:center; }
+  .col-eff{ grid-column:span 3; }
+  .col-stat{ grid-column:span 4; }
+  .col-export{ grid-column:span 4; }
+
+  @media (max-width:920px){
+    .col-control, .col-burn, .col-eff, .col-stat, .col-export{ grid-column:span 12; }
+  }
+
+  /* ---- Form fields ---- */
+  .field{ display:flex; flex-direction:column; gap:8px; }
+  .field-label{ font-size:12.5px; color:var(--text-muted); font-weight:500; }
+  .field-row{ display:flex; gap:10px; }
+
+  .input-shell{
+    display:flex; align-items:center; background:var(--bg-inset);
+    border:1px solid var(--border-line); border-radius:10px;
+    transition:border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+    overflow:hidden;
+  }
+  .input-shell:hover{ border-color:#3a4256; }
+  .input-shell:focus-within{ border-color:var(--burn-orange); box-shadow:0 0 0 3px rgba(255,138,61,0.14); }
+  .currency-symbol{ padding:0 0 0 14px; font-family:inherit; color:var(--text-muted); font-weight:600; font-size:15px; }
+  .wage-input{
+    flex:1; background:transparent; border:none; outline:none; color:var(--text-primary);
+    font-family:'SF Mono',Consolas,monospace; font-size:16px; font-weight:600;
+    padding:11px 12px 11px 6px; min-width:0;
+  }
+  .currency-select{
+    background:var(--bg-inset); border:1px solid var(--border-line); border-radius:10px;
+    color:var(--text-primary); font-size:13px; font-weight:600; padding:0 10px;
+    width:88px; cursor:pointer; transition:border-color 0.2s ease;
+    appearance:none; -webkit-appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0L5 6L10 0Z' fill='%237c869b'/></svg>");
+    background-repeat:no-repeat; background-position:right 12px center;
+    padding-right:26px;
+  }
+  .currency-select:hover{ border-color:#3a4256; }
+  .currency-select:focus{ outline:none; border-color:var(--burn-orange); }
+
+  select.distraction-select{
+    width:100%; background:var(--bg-inset); border:1px solid var(--border-line); border-radius:10px;
+    color:var(--text-primary); font-size:13.5px; padding:11px 34px 11px 14px; cursor:pointer;
+    appearance:none; -webkit-appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0L5 6L10 0Z' fill='%237c869b'/></svg>");
+    background-repeat:no-repeat; background-position:right 14px center;
+    transition:border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  select.distraction-select:hover{ border-color:#3a4256; }
+  select.distraction-select:focus{ outline:none; border-color:var(--burn-orange); box-shadow:0 0 0 3px rgba(255,138,61,0.14); }
+  select:disabled, input:disabled{ opacity:0.5; cursor:not-allowed; }
+
+  .flavor-text{ font-size:12px; font-style:italic; color:var(--text-dim); margin-top:8px; }
+
+  /* ---- Range slider ---- */
+  .slider-row{ display:flex; align-items:center; gap:12px; margin-top:2px; }
+  input[type="range"]{
+    -webkit-appearance:none; appearance:none;
+    flex:1; height:5px; border-radius:999px;
+    background:linear-gradient(90deg, var(--burn-crimson), var(--burn-orange) var(--fill,50%), var(--border-line) var(--fill,50%));
+    outline:none; cursor:pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none;
+    width:17px; height:17px; border-radius:50%;
+    background:var(--text-primary);
+    border:3px solid var(--burn-orange);
+    box-shadow:0 2px 6px rgba(0,0,0,0.4);
+    cursor:pointer; transition:transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  input[type="range"]:hover::-webkit-slider-thumb{ transform:scale(1.18); box-shadow:0 0 0 6px rgba(255,138,61,0.16); }
+  input[type="range"]::-moz-range-thumb{
+    width:17px; height:17px; border-radius:50%; background:var(--text-primary);
+    border:3px solid var(--burn-orange); cursor:pointer; transition:transform 0.15s ease;
+  }
+  input[type="range"]:hover::-moz-range-thumb{ transform:scale(1.18); }
+  .slider-max-label{ font-size:11px; color:var(--text-dim); font-family:'SF Mono',monospace; width:34px; text-align:right; }
+
+  /* ---- Buttons ---- */
+  .btn-row{ display:flex; gap:10px; }
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    border-radius:11px; font-weight:600; font-size:13.5px; cursor:pointer;
+    border:1px solid transparent; transition:transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+    padding:12px 16px; user-select:none;
+  }
+  .btn svg{ width:15px; height:15px; flex-shrink:0; }
+  .btn:active:not(:disabled){ transform:scale(0.97); }
+  .btn:disabled{ opacity:0.35; cursor:not-allowed; transform:none !important; box-shadow:none !important; }
+
+  .btn-primary{
+    flex:1; background:linear-gradient(135deg, var(--burn-crimson), var(--burn-orange));
+    color:#0a0d14;
+  }
+  .btn-primary:hover:not(:disabled){ transform:translateY(-2px); box-shadow:0 10px 26px -8px rgba(255,90,50,0.5); }
+
+  .btn-ghost{
+    background:transparent; border-color:var(--border-line); color:var(--text-primary);
+  }
+  .btn-ghost:hover:not(:disabled){ border-color:#4a5470; background:rgba(255,255,255,0.03); transform:translateY(-2px); }
+
+  .btn-export{
+    width:100%; background:var(--bg-inset); border-color:var(--border-line); color:var(--text-primary);
+    padding:13px 16px;
+  }
+  .btn-export:hover:not(:disabled){ border-color:var(--burn-orange); box-shadow:0 0 0 3px rgba(255,138,61,0.1); transform:translateY(-2px); }
+
+  button:focus-visible, select:focus-visible, input:focus-visible{
+    outline:2px solid var(--burn-orange); outline-offset:2px;
+  }
+
+  .info-box{
+    background:var(--bg-inset); border:1px solid var(--border-line-soft); border-radius:10px;
+    padding:13px 14px; font-size:11.5px; color:var(--text-muted); line-height:1.55;
+  }
+
+  /* ---- Burn meter ---- */
+  .burn-visual{ display:flex; align-items:center; justify-content:center; gap:30px; width:100%; min-height:230px; flex:1; }
+  .burn-tube{
+    position:relative; width:58px; height:220px; border-radius:29px;
+    background:#040508; border:1px solid var(--border-line); overflow:hidden;
+    box-shadow:inset 0 0 18px rgba(0,0,0,0.7);
+    animation:flicker 2s ease-in-out infinite;
+  }
+  @keyframes flicker{ 0%,100%{ filter:brightness(1);} 50%{ filter:brightness(1.3);} }
+  .burn-fill{
+    position:absolute; bottom:0; left:0; right:0;
+    background:linear-gradient(0deg, #7a1f1f 0%, var(--burn-crimson) 35%, var(--burn-orange) 72%, var(--ember-gold) 100%);
+    transition:height 0.3s ease-out; border-top:2px solid rgba(255,224,153,0.9);
+  }
+  .burn-fill::before{
+    content:''; position:absolute; top:-6px; left:0; right:0; height:12px;
+    background:inherit; filter:blur(4px); opacity:0.9;
+  }
+  .tube-ticks{ position:absolute; inset:0; display:flex; flex-direction:column; justify-content:space-between; padding:10px 0; pointer-events:none; }
+  .tube-tick{ height:1px; width:100%; background:rgba(255,255,255,0.06); }
+  .ember{
+    position:absolute; bottom:0; border-radius:50%; pointer-events:none;
+    background:radial-gradient(circle, var(--ember-gold), var(--burn-orange) 70%, transparent 100%);
+    animation:ember-rise linear forwards;
+  }
+  @keyframes ember-rise{ 0%{ transform:translateY(0) scale(1); opacity:0.9;} 100%{ transform:translateY(-170px) scale(0.2); opacity:0;} }
+
+  .cash-stack{
+    position:relative; width:100%; max-width:210px;
+    display:flex; flex-direction:column-reverse; align-items:center;
+    padding-top:14px;
+  }
+  .bill{
+    width:100%; aspect-ratio:190/86; margin-top:-30px;
+    border-radius:5px; position:relative;
+    transform:rotate(var(--tilt,0deg));
+    transform-origin:center;
+    filter:drop-shadow(0 3px 4px rgba(0,0,0,0.45));
+    transition:filter 0.7s ease, transform 0.7s ease, opacity 0.7s ease;
+  }
+  .bill:first-child{ margin-top:0; }
+  .bill svg{ width:100%; height:100%; display:block; overflow:visible; }
+  .bill .note-ink{ stroke:rgba(255,255,255,0.55); }
+  .bill .note-ink-soft{ stroke:rgba(255,255,255,0.28); }
+  .bill .note-glyph{ fill:rgba(255,255,255,0.62); font-family:Georgia,'Times New Roman',serif; font-weight:700; }
+  .bill .note-portrait{ fill:rgba(0,0,0,0.16); stroke:rgba(255,255,255,0.32); }
+  .bill .note-fold{ fill:rgba(0,0,0,0.08); }
+
+  /* burned / spent bill: charred, ashen, flattened into the pile */
+  .bill.is-burned{
+    filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5)) grayscale(0.85) brightness(0.55);
+    transform:rotate(var(--tilt,0deg)) scale(0.94);
+    opacity:0.55;
+  }
+  .bill.is-burned .note-face{ fill:#20211f; }
+  .bill.is-burned .note-glyph, .bill.is-burned .note-ink{ opacity:0.4; }
+
+  .visual-note{ font-size:11.5px; color:var(--text-dim); text-align:center; margin-top:14px; }
+
+  /* ---- Efficiency ---- */
+  .eff-value{ font-family:'SF Mono',monospace; font-weight:800; font-size:2.7rem; line-height:1; transition:color 0.3s ease; }
+  .eff-label{ font-size:13.5px; font-weight:600; margin-top:6px; transition:color 0.3s ease; }
+  .eff-track{ width:100%; height:7px; border-radius:999px; background:var(--bg-inset); margin-top:16px; overflow:hidden; }
+  .eff-bar{ height:100%; border-radius:999px; transition:width 0.3s ease, background 0.3s ease; }
+
+  /* ---- Stat cards ---- */
+  .stat-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .stat-tag{ font-family:'SF Mono',monospace; font-size:10.5px; letter-spacing:0.05em; padding:3px 8px; border-radius:999px; background:var(--bg-inset); border:1px solid var(--border-line-soft); }
+  .stat-value{ font-family:'SF Mono',monospace; font-weight:800; font-size:2.1rem; }
+
+  /* ---- Export card ---- */
+  .export-preview{ background:var(--bg-inset); border:1px solid var(--border-line-soft); border-radius:10px; padding:12px 14px; font-family:'SF Mono',monospace; font-size:11px; color:var(--text-dim); line-height:1.7; margin-bottom:14px; }
+  .export-preview span{ color:var(--text-muted); }
+
+  footer.disclaimer{ text-align:center; font-size:11.5px; color:var(--text-dim); margin-top:26px; }
+
+  /* ============================================================
+     MILESTONE FX
+  ============================================================ */
+  .shake{ animation:screen-shake 0.42s cubic-bezier(.36,.07,.19,.97) both; }
+  @keyframes screen-shake{
+    10%,90%{ transform:translate3d(-1px,0,0); }
+    20%,80%{ transform:translate3d(2px,0,0); }
+    30%,50%,70%{ transform:translate3d(-4px,0,0); }
+    40%,60%{ transform:translate3d(4px,0,0); }
+  }
+
+  .toast-stack{ position:fixed; top:22px; left:50%; transform:translateX(-50%); z-index:50; display:flex; flex-direction:column; gap:10px; align-items:center; pointer-events:none; }
+  .toast{
+    display:flex; align-items:center; gap:10px;
+    background:linear-gradient(135deg, #1a0e0e, #1c130a);
+    border:1px solid rgba(255,138,61,0.4);
+    box-shadow:0 14px 34px -10px rgba(255,60,50,0.35), 0 0 0 1px rgba(0,0,0,0.4);
+    color:var(--text-primary); padding:13px 20px; border-radius:12px;
+    font-size:13.5px; font-weight:600; white-space:nowrap;
+    animation:toast-in 0.35s cubic-bezier(.2,.9,.3,1.3) both, toast-out 0.35s ease forwards 3.15s;
+  }
+  .toast .toast-amt{ font-family:'SF Mono',monospace; color:var(--burn-orange); }
+  @keyframes toast-in{ from{ opacity:0; transform:translateY(-14px) scale(0.94);} to{ opacity:1; transform:translateY(0) scale(1);} }
+  @keyframes toast-out{ to{ opacity:0; transform:translateY(-10px) scale(0.96);} }
+
+  @media (prefers-reduced-motion: reduce){
+    .status-dot.live, .burn-tube, .ember, .toast, .shake{ animation:none !important; }
+  }
+
+  @media (max-width:520px){
+    .toast{ white-space:normal; text-align:center; }
+  }
+
+  .hist-table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  .hist-table th{ text-align:left; color:var(--text-dim); font-weight:500; padding:6px 8px; border-bottom:1px solid var(--border-line); }
+  .hist-table td{ padding:7px 8px; border-bottom:1px solid var(--border-line); }
+</style>
+</head>
+<body>
+
+<div class="toast-stack" id="toastStack" aria-live="polite"></div>
+
+<div class="shell" id="appShell">
+
+  <!-- Top bar -->
+  <div class="top-bar">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2C12 2 6 9 6 14a6 6 0 0012 0c0-2-1-3.5-2-5 .3 2-.5 3-1.5 3.5C15 11 13.5 9 13.5 6.5 13.5 4.5 13 3 12 2z" fill="#0a0d14"/></svg>
+      </div>
+      <div>
+        <div class="brand-name">Doom-Timer</div>
+        <div class="brand-sub">Procrastination Cost Engine</div>
+      </div>
+    </div>
+    <div class="status-pill">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusLabel">Idle — not burning</span>
+    </div>
+  </div>
+
+  <h1 class="headline">The <span class="accent">Doom-Timer</span></h1>
+  <p class="subhead">Every second of distraction has a price tag. Watch yours burn, live.</p>
+
+  <!-- Hero ticker -->
+  <div class="hero" id="heroPanel">
+    <div class="hero-row">
+      <div>
+        <div class="hero-label">Currently melting on</div>
+        <div class="hero-distraction"><span id="activeEmoji">📱</span><span id="activeDistraction">Doomscrolling social media</span></div>
+      </div>
+      <div>
+        <div class="hero-label" style="text-align:right;">Session elapsed</div>
+        <div class="hero-clock font-mono" id="sessionClock">00:00:00</div>
+      </div>
+    </div>
+    <div class="hero-money-wrap">
+      <div class="hero-label">Cash vaporized this session</div>
+      <div class="hero-money" id="sessionMoney">$0.0000</div>
+    </div>
+  </div>
+
+  <!-- Bento grid -->
+  <div class="bento">
+
+    <!-- Control panel -->
+    <div class="card col-control">
+      <div class="card-title"><span class="chip"></span>Control Panel</div>
+
+      <div class="field">
+        <label class="field-label" for="wageInput">Hourly wage &amp; currency</label>
+        <div class="field-row">
+          <select id="currencySelect" class="currency-select" aria-label="Currency">
+            <option value="USD|$">USD $</option>
+            <option value="EUR|€">EUR €</option>
+            <option value="GBP|£">GBP £</option>
+            <option value="INR|₹">INR ₹</option>
+            <option value="JPY|¥">JPY ¥</option>
+            <option value="AUD|A$">AUD A$</option>
+            <option value="CAD|C$">CAD C$</option>
+          </select>
+          <div class="input-shell" style="flex:1;">
+            <span class="currency-symbol" id="currencyPrefix">$</span>
+            <input id="wageInput" class="wage-input" type="number" min="0" step="0.01" value="25.00" placeholder="25.00">
+          </div>
+        </div>
+        <div class="slider-row">
+          <input type="range" id="wageSlider" min="0" max="250" step="0.5" value="25">
+          <span class="slider-max-label">250</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="distractionSelect">Choose your distraction</label>
+        <select id="distractionSelect" class="distraction-select">
+          <option value="Doomscrolling social media|📱">📱 Doomscrolling social media</option>
+          <option value="Sitting in an endless meeting|🗓️">🗓️ Sitting in an endless meeting</option>
+          <option value="Watercooler gossip|🗣️">🗣️ Watercooler gossip</option>
+          <option value="Staring at the wall|🧱">🧱 Staring at the wall</option>
+          <option value="Refreshing your inbox|📧">📧 Refreshing your inbox</option>
+          <option value="Overthinking a Slack reply|💬">💬 Overthinking a Slack reply</option>
+          <option value="Watching 'just one more' video|📺">📺 Watching "just one more" video</option>
+        </select>
+        <div class="flavor-text" id="distractionFlavor">Every scroll costs you something.</div>
+      </div>
+
+      <div class="btn-row">
+        <button id="startBtn" class="btn btn-primary">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M7 5l12 7-12 7V5z" fill="currentColor"/></svg>
+          <span id="startBtnLabel">Start Slacking</span>
+        </button>
+        <button id="pauseBtn" class="btn btn-ghost" disabled>
+          <svg viewBox="0 0 24 24" fill="none"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg>
+          Pause
+        </button>
+        <button id="resetBtn" class="btn btn-ghost">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M4 4v6h6M20 20v-6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.5 15a8 8 0 1013.9-7.4M19.5 9A8 8 0 006 6.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          Reset
+        </button>
+      </div>
+
+      <div class="info-box">Set your real hourly wage, pick what's stealing your time, and hit start. The clock tracks real elapsed seconds and converts them into real money, live.</div>
+    </div>
+
+    <!-- Burn meter -->
+    <div class="card col-burn">
+      <div class="card-title" style="align-self:flex-start;"><span class="chip" style="background:var(--burn-crimson);"></span>The Burn Meter</div>
+      <div class="burn-visual">
+        <div class="burn-tube" id="burnTube">
+          <div class="tube-ticks">
+            <div class="tube-tick"></div><div class="tube-tick"></div><div class="tube-tick"></div><div class="tube-tick"></div><div class="tube-tick"></div>
+          </div>
+          <div class="burn-fill" id="burnFill" style="height:100%;"></div>
+        </div>
+        <div class="cash-stack" id="cashStack"></div>
+      </div>
+      <div class="visual-note">The tube empties as your wage burns. The stack wilts as your minutes vanish.</div>
+    </div>
+
+    <!-- Efficiency -->
+    <div class="card col-eff">
+      <div class="card-title"><span class="chip" style="background:var(--efficiency-green);"></span>Efficiency</div>
+      <div class="eff-value" id="efficiencyValue" style="color:var(--efficiency-green);">100%</div>
+      <div class="eff-label" id="efficiencyLabel" style="color:var(--efficiency-green);">Optimal</div>
+      <div class="eff-track"><div class="eff-bar" id="efficiencyBar" style="width:100%; background:var(--efficiency-green);"></div></div>
+      <div class="card-note">Illustrative score: drops the longer a single session runs, reaching 0% at 5 minutes.</div>
+    </div>
+
+    <!-- Stats -->
+    <div class="card col-stat">
+      <div class="stat-head">
+        <div class="card-title" style="margin:0;"><span class="chip" style="background:var(--burn-orange);"></span>Total Lost Today</div>
+        <div class="stat-tag" style="color:var(--burn-orange);">TODAY</div>
+      </div>
+      <div class="stat-value" id="totalToday">$0.00</div>
+      <div class="card-note">Sum of every session today (kept in this browser).</div>
+    </div>
+
+    <div class="card col-stat">
+      <div class="stat-head">
+        <div class="card-title" style="margin:0;"><span class="chip" style="background:var(--burn-crimson);"></span>Annual Projection</div>
+        <div class="stat-tag" style="color:var(--burn-crimson);">PER YEAR</div>
+      </div>
+      <div class="stat-value" id="annualProjection">$0.00</div>
+      <select id="daysSelect" class="distraction-select" style="margin-top:12px;padding:8px 30px 8px 12px;font-size:12px;" aria-label="Days per year">
+        <option value="260">Working days (260 / year)</option>
+        <option value="365">Every day (365 / year)</option>
+      </select>
+      <div class="card-note">What today's habit costs if repeated on every one of those days.</div>
+    </div>
+
+    <!-- Export -->
+    <div class="card col-export">
+      <div class="card-title"><span class="chip" style="background:var(--ember-gold);"></span>Doom Report</div>
+      <div class="export-preview">
+        <div>currency: <span id="prevCurrency">USD</span></div>
+        <div>wage/hr: <span id="prevWage">$25.00</span></div>
+        <div>lost today: <span id="prevLost">$0.00</span></div>
+        <div>efficiency: <span id="prevEff">100%</span></div>
+      </div>
+      <button id="exportBtn" class="btn btn-export">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        Export Today's Doom Report
+      </button>
+      <div class="card-note">Downloads a plain-text log, generated in your browser.</div>
+    </div>
+
+    <!-- Session history (from the database) -->
+    <div class="card" style="grid-column:span 12;">
+      <div class="card-title"><span class="chip" style="background:var(--efficiency-green);"></span>Session History (saved in database)</div>
+      <div class="card-note" id="historySummary" style="margin:0 0 12px;">Loading…</div>
+      <div style="overflow-x:auto;">
+        <table class="hist-table" id="historyTable">
+          <thead><tr><th>When</th><th>Distraction</th><th>Duration</th><th>Lost</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <footer class="disclaimer">Sessions are saved in a database on your own computer and never leave it. <button id="clearBtn" style="background:none;border:none;color:var(--text-muted);text-decoration:underline;cursor:pointer;font-size:inherit;padding:0;">Clear today's data</button></footer>
+</div>
+
+<script>
+(function(){
+  const $ = (id) => document.getElementById(id);
+
+  const appShell = $('appShell');
+  const wageInput = $('wageInput');
+  const wageSlider = $('wageSlider');
+  const currencySelect = $('currencySelect');
+  const currencyPrefix = $('currencyPrefix');
+  const distractionSelect = $('distractionSelect');
+  const distractionFlavor = $('distractionFlavor');
+  const activeDistraction = $('activeDistraction');
+  const activeEmoji = $('activeEmoji');
+  const startBtn = $('startBtn');
+  const startBtnLabel = $('startBtnLabel');
+  const pauseBtn = $('pauseBtn');
+  const resetBtn = $('resetBtn');
+  const exportBtn = $('exportBtn');
+  const daysSelect = $('daysSelect');
+  const clearBtn = $('clearBtn');
+  const sessionClock = $('sessionClock');
+  const sessionMoney = $('sessionMoney');
+  const totalTodayEl = $('totalToday');
+  const annualProjectionEl = $('annualProjection');
+  const efficiencyValue = $('efficiencyValue');
+  const efficiencyLabel = $('efficiencyLabel');
+  const efficiencyBar = $('efficiencyBar');
+  const burnFill = $('burnFill');
+  const burnTube = $('burnTube');
+  const cashStack = $('cashStack');
+  const statusDot = $('statusDot');
+  const statusLabel = $('statusLabel');
+  const heroPanel = $('heroPanel');
+  const toastStack = $('toastStack');
+  const prevCurrency = $('prevCurrency');
+  const prevWage = $('prevWage');
+  const prevLost = $('prevLost');
+  const prevEff = $('prevEff');
+
+  const flavors = {
+    'Doomscrolling social media': 'Every scroll costs you something.',
+    'Sitting in an endless meeting': 'This could have been an email. It was not.',
+    'Watercooler gossip': 'The tea is hot. So is your burn rate.',
+    'Staring at the wall': 'The wall is free. Your time is not.',
+    'Refreshing your inbox': 'It will still be empty in five seconds.',
+    'Overthinking a Slack reply': 'Nobody is reading it that closely.',
+    "Watching 'just one more' video": 'There is never just one more.'
+  };
+
+  function buildBillMarkup(index, glyph) {
+    const g = 'noteGrad' + index;
+    return `
+      <svg viewBox="0 0 190 86" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="${g}" x1="0" y1="0" x2="190" y2="86" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#317f55"/>
+            <stop offset="55%" stop-color="#1f5c3f"/>
+            <stop offset="100%" stop-color="#173f2c"/>
+          </linearGradient>
+        </defs>
+        <rect x="1.5" y="1.5" width="187" height="83" rx="6" fill="url(#${g})" class="note-face" stroke="rgba(255,255,255,0.2)"/>
+        <rect x="7" y="7" width="176" height="72" rx="3" fill="none" class="note-ink-soft" stroke-width="1" stroke-dasharray="2 2"/>
+        <path d="M12 40 Q 30 20 48 40 T 84 40 T 120 40 T 156 40 T 178 40" class="note-ink-soft" stroke-width="1" fill="none"/>
+        <path d="M12 52 Q 30 32 48 52 T 84 52 T 120 52 T 156 52 T 178 52" class="note-ink-soft" stroke-width="1" fill="none" opacity="0.55"/>
+        <path d="M12 60 Q 30 46 48 60 T 84 60 T 120 60 T 156 60 T 178 60" class="note-ink-soft" stroke-width="0.75" fill="none" opacity="0.35"/>
+        <circle cx="28" cy="43" r="14" fill="none" class="note-ink-soft" stroke-width="1"/>
+        <circle cx="28" cy="43" r="10" fill="none" class="note-ink-soft" stroke-width="0.6" opacity="0.6"/>
+        <circle cx="162" cy="43" r="14" fill="none" class="note-ink-soft" stroke-width="1"/>
+        <circle cx="162" cy="43" r="10" fill="none" class="note-ink-soft" stroke-width="0.6" opacity="0.6"/>
+        <ellipse cx="95" cy="43" rx="18" ry="24" class="note-portrait" stroke-width="1"/>
+        <circle cx="95" cy="34" r="7.5" fill="rgba(255,255,255,0.22)"/>
+        <path d="M82 57 q13 -14 26 0 z" fill="rgba(255,255,255,0.18)"/>
+        <text x="15" y="21" font-size="13" class="note-glyph bill-glyph">${glyph}</text>
+        <text x="175" y="74" font-size="13" text-anchor="end" class="note-glyph bill-glyph">${glyph}</text>
+        <path d="M0 86 L190 58 L190 86 Z" class="note-fold"/>
+      </svg>`;
+  }
+  const BILL_COUNT = 8;
+  for (let i = 0; i < BILL_COUNT; i++) {
+    const bill = document.createElement('div');
+    bill.className = 'bill';
+    bill.style.setProperty('--tilt', ((Math.random() * 5) - 2.5).toFixed(2) + 'deg');
+    bill.innerHTML = buildBillMarkup(i, '$');
+    cashStack.appendChild(bill);
+  }
+  const bills = Array.from(cashStack.children);
+  const billGlyphs = Array.from(cashStack.querySelectorAll('.bill-glyph'));
+
+  // ---- Milestones: converted from a USD baseline, scaled per currency ----
+  const MILESTONES_USD = [
+    { amount: 1,    message: "That's a candy bar. Gone." },
+    { amount: 5,    message: "There goes a premium coffee." },
+    { amount: 10,   message: "Say goodbye to lunch money." },
+    { amount: 25,   message: "That's a movie ticket, up in smoke." },
+    { amount: 50,   message: "You just torched a nice dinner." },
+    { amount: 100,  message: "That's a full tank of gas. Poof." },
+    { amount: 250,  message: "A weekend trip just evaporated." },
+    { amount: 500,  message: "That's rent money, floating away." },
+    { amount: 1000, message: "You just burned a plane ticket." }
+  ];
+  const triggeredMilestones = new Map(); // USD baseline amount -> threshold in active currency
+
+  let currencyCode = 'USD';
+  let currencySymbol = '$';
+
+  let running = false;
+  let startTimestamp = null;
+  let accumulatedMs = 0;
+  let totalTodayBase = 0;
+  let totalTodayMsBase = 0;
+  let tickHandle = null;
+  let emberHandle = null;
+
+  const TUBE_DRAIN_SECONDS = 180;
+
+  function updateFlavor() {
+    const [name, emoji] = distractionSelect.value.split('|');
+    activeDistraction.textContent = name;
+    activeEmoji.textContent = emoji;
+    distractionFlavor.textContent = flavors[name] || '';
+  }
+  distractionSelect.addEventListener('change', updateFlavor);
+  updateFlavor();
+
+  // corner glyphs need a single compact character to sit cleanly in the note's die-cut corner
+  const CORNER_GLYPH = { USD:'$', EUR:'€', GBP:'£', INR:'₹', JPY:'¥', AUD:'$', CAD:'$' };
+
+  function updateCurrency() {
+    const [code, symbol] = currencySelect.value.split('|');
+    currencyCode = code;
+    currencySymbol = symbol;
+    currencyPrefix.textContent = symbol;
+    const glyph = CORNER_GLYPH[code] || '$';
+    billGlyphs.forEach(el => { el.textContent = glyph; });
+    tick();
+  }
+  currencySelect.addEventListener('change', updateCurrency);
+
+  function syncSliderFromInput() {
+    const v = parseFloat(wageInput.value) || 0;
+    const max = parseFloat(wageSlider.max);
+    const clamped = Math.min(v, max);
+    wageSlider.value = clamped;
+    wageSlider.style.setProperty('--fill', (clamped / max * 100) + '%');
+  }
+  function syncInputFromSlider() {
+    wageInput.value = parseFloat(wageSlider.value).toFixed(2);
+    wageSlider.style.setProperty('--fill', (wageSlider.value / wageSlider.max * 100) + '%');
+  }
+  wageInput.addEventListener('input', () => { syncSliderFromInput(); tick(); });
+  wageSlider.addEventListener('input', () => { syncInputFromSlider(); tick(); });
+  syncSliderFromInput();
+
+  function formatClock(ms) {
+    const totalSec = Math.floor(ms / 1000);
+    const h = String(Math.floor(totalSec / 3600)).padStart(2, '0');
+    const m = String(Math.floor((totalSec % 3600) / 60)).padStart(2, '0');
+    const s = String(totalSec % 60).padStart(2, '0');
+    return `${h}:${m}:${s}`;
+  }
+
+  function formatMoney(n, decimals) {
+    return currencySymbol + n.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  }
+
+  function getDays() { return parseInt(daysSelect.value, 10) || 365; }
+
+  function getWage() {
+    const v = parseFloat(wageInput.value);
+    return isNaN(v) || v < 0 ? 0 : v;
+  }
+
+  function spawnEmber() {
+    const ember = document.createElement('div');
+    const size = 3 + Math.random() * 4;
+    ember.className = 'ember';
+    ember.style.width = size + 'px';
+    ember.style.height = size + 'px';
+    ember.style.left = (8 + Math.random() * 40) + 'px';
+    ember.style.animationDuration = (1.2 + Math.random() * 0.8) + 's';
+    burnTube.appendChild(ember);
+    ember.addEventListener('animationend', () => ember.remove());
+  }
+
+  function showToast(message, amountLabel) {
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.innerHTML = `<span>🔥</span><span>${message}</span><span class="toast-amt">${amountLabel}</span>`;
+    toastStack.appendChild(toast);
+    setTimeout(() => toast.remove(), 3600);
+  }
+
+  function triggerShake() {
+    appShell.classList.remove('shake');
+    // force reflow so animation can restart if triggered again quickly
+    void appShell.offsetWidth;
+    appShell.classList.add('shake');
+    setTimeout(() => appShell.classList.remove('shake'), 450);
+  }
+
+  // Approximate units of each currency per 1 USD, used only to scale the milestone jokes
+  const RATES = { USD:1, EUR:0.9, GBP:0.8, INR:85, JPY:150, AUD:1.5, CAD:1.4 };
+  function niceRound(v) {
+    if (v < 10) return Math.max(0.5, Math.round(v * 2) / 2);
+    const p = Math.pow(10, Math.floor(Math.log10(v)) - 1);
+    return Math.round(v / p) * p;
+  }
+  function fmtThreshold(t) { return formatMoney(t, t % 1 ? 2 : 0); }
+
+  function checkMilestones(totalTodayDisplay) {
+    const rate = RATES[currencyCode] || 1;
+    for (const m of MILESTONES_USD) {
+      const threshold = niceRound(m.amount * rate);
+      if (totalTodayDisplay >= threshold && !triggeredMilestones.has(m.amount)) {
+        triggeredMilestones.set(m.amount, threshold);
+        showToast(m.message, fmtThreshold(threshold));
+        triggerShake();
+      }
+    }
+  }
+
+  function updateVisuals(elapsedMs) {
+    const elapsedSec = elapsedMs / 1000;
+    const drainRatio = Math.min(elapsedSec / TUBE_DRAIN_SECONDS, 1);
+    const fillPct = Math.max(4, (1 - drainRatio) * 100);
+    burnFill.style.height = fillPct + '%';
+
+    const billsGone = Math.min(BILL_COUNT, Math.floor(drainRatio * BILL_COUNT));
+    bills.forEach((bill, idx) => {
+      const posFromTop = BILL_COUNT - 1 - idx;
+      bill.classList.toggle('is-burned', posFromTop < billsGone);
+    });
+
+    const efficiency = Math.max(0, Math.round(100 - (elapsedSec / 300) * 100));
+    efficiencyValue.textContent = efficiency + '%';
+    efficiencyBar.style.width = efficiency + '%';
+    let color, label;
+    if (efficiency >= 80) { color = 'var(--efficiency-green)'; label = 'Optimal'; }
+    else if (efficiency >= 50) { color = 'var(--efficiency-yellow)'; label = 'Leaking Focus'; }
+    else if (efficiency >= 20) { color = 'var(--burn-orange)'; label = 'Critical Burn'; }
+    else { color = 'var(--burn-crimson)'; label = 'Financial Meltdown'; }
+    efficiencyValue.style.color = color;
+    efficiencyBar.style.background = color;
+    efficiencyLabel.textContent = label;
+    efficiencyLabel.style.color = color;
+    return efficiency;
+  }
+
+  function tick() {
+    const now = performance.now();
+    const elapsedMs = accumulatedMs + (running ? now - startTimestamp : 0);
+    const wage = getWage();
+    const sessionDollars = (elapsedMs / 3600000) * wage;
+
+    sessionClock.textContent = formatClock(elapsedMs);
+    sessionMoney.textContent = formatMoney(sessionDollars, 4);
+
+    const totalTodayDisplay = totalTodayBase + sessionDollars;
+    totalTodayEl.textContent = formatMoney(totalTodayDisplay, 2);
+    annualProjectionEl.textContent = formatMoney(totalTodayDisplay * getDays(), 2);
+
+    const efficiency = updateVisuals(elapsedMs);
+    if (running) checkMilestones(totalTodayDisplay);
+
+    prevCurrency.textContent = currencyCode;
+    prevWage.textContent = formatMoney(wage, 2);
+    prevLost.textContent = formatMoney(totalTodayDisplay, 2);
+    prevEff.textContent = efficiency + '%';
+  }
+
+  function startLoop() {
+    tickHandle = setInterval(tick, 100);
+    emberHandle = setInterval(spawnEmber, 350);
+  }
+  function stopLoop() {
+    clearInterval(tickHandle);
+    clearInterval(emberHandle);
+  }
+
+  function setRunningUI(isRunning) {
+    startBtnLabel.textContent = isRunning ? 'Slacking…' : 'Start Slacking';
+    startBtn.disabled = isRunning;
+    pauseBtn.disabled = !isRunning;
+    distractionSelect.disabled = isRunning;
+    wageInput.disabled = isRunning;
+    wageSlider.disabled = isRunning;
+    currencySelect.disabled = isRunning;
+    statusDot.classList.toggle('live', isRunning);
+    statusLabel.textContent = isRunning ? 'Live — burning cash' : 'Paused';
+    heroPanel.classList.toggle('is-live', isRunning);
+  }
+
+  startBtn.addEventListener('click', () => {
+    if (running) return;
+    running = true;
+    startTimestamp = performance.now();
+    setRunningUI(true);
+    startLoop();
+  });
+
+  pauseBtn.addEventListener('click', () => {
+    if (!running) return;
+    running = false;
+    accumulatedMs += performance.now() - startTimestamp;
+    startTimestamp = null;
+    stopLoop();
+    setRunningUI(false);
+    statusLabel.textContent = 'Paused — session held';
+    saveState();
+  });
+
+  resetBtn.addEventListener('click', () => {
+    if (running) {
+      accumulatedMs += performance.now() - startTimestamp;
+    }
+    const wage = getWage();
+    totalTodayBase += (accumulatedMs / 3600000) * wage;
+    totalTodayMsBase += accumulatedMs;
+    const sessionMs = accumulatedMs, sessionWage = wage;
+    running = false;
+    accumulatedMs = 0;
+    startTimestamp = null;
+    stopLoop();
+    setRunningUI(false);
+    statusLabel.textContent = 'Idle — not burning';
+    tick();
+    saveState();
+    if (sessionMs >= 1000) postSession(sessionMs, sessionWage);
+  });
+
+  exportBtn.addEventListener('click', () => {
+    const now = performance.now();
+    const elapsedMs = accumulatedMs + (running ? now - startTimestamp : 0);
+    const wage = getWage();
+    const sessionDollars = (elapsedMs / 3600000) * wage;
+    const totalTodayDisplay = totalTodayBase + sessionDollars;
+    const efficiency = Math.max(0, Math.round(100 - ((elapsedMs / 1000) / 300) * 100));
+    const [distractionName] = distractionSelect.value.split('|');
+    const stamp = new Date();
+
+    const report = [
+      '===========================================',
+      '        THE DOOM-TIMER — DOOM REPORT',
+      '===========================================',
+      `Generated:          ${stamp.toLocaleString()}`,
+      `Currency:            ${currencyCode}`,
+      `Hourly wage:         ${formatMoney(wage, 2)}`,
+      `Distraction logged:  ${distractionName}`,
+      `Time lost today:     ${formatClock(totalTodayMsBase + elapsedMs)}`,
+      `Current session:     ${formatClock(elapsedMs)}`,
+      '-------------------------------------------',
+      `Total lost today:    ${formatMoney(totalTodayDisplay, 2)}`,
+      `Projected annual:    ${formatMoney(totalTodayDisplay * getDays(), 2)} (${getDays()} days)`,
+      `Efficiency rating:   ${efficiency}%`,
+      '-------------------------------------------',
+      'Milestones hit:',
+      ...(triggeredMilestones.size
+        ? Array.from(triggeredMilestones.values()).sort((a,b)=>a-b).map(m => `  - ${fmtThreshold(m)} threshold crossed`)
+        : ['  - none yet']),
+      '===========================================',
+      'Generated entirely client-side. Nothing was',
+      'saved or transmitted anywhere.',
+      '==========================================='
+    ].join('\n');
+
+    const blob = new Blob([report], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const dateStr = stamp.toISOString().slice(0,10);
+    a.href = url;
+    a.download = `doom-report-${dateStr}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  // ---- Persistence (today only, this browser only) ----
+  const STORE_KEY = 'doomTimer.v1';
+  const todayKey = () => new Date().toLocaleDateString('en-CA');
+
+  function saveState() {
+    try {
+      const liveMs = accumulatedMs + (running ? performance.now() - startTimestamp : 0);
+      localStorage.setItem(STORE_KEY, JSON.stringify({
+        day: todayKey(),
+        totalTodayBase: totalTodayBase + (liveMs / 3600000) * getWage(),
+        totalTodayMsBase: totalTodayMsBase + liveMs,
+        milestones: Array.from(triggeredMilestones.entries()),
+        wage: wageInput.value,
+        currency: currencySelect.value,
+        distraction: distractionSelect.value,
+        days: daysSelect.value
+      }));
+    } catch (e) { /* storage unavailable: app still works, just without saving */ }
+  }
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return;
+      const st = JSON.parse(raw);
+      if (!st || st.day !== todayKey()) return; // new day, fresh start
+      totalTodayBase = Number(st.totalTodayBase) || 0;
+      totalTodayMsBase = Number(st.totalTodayMsBase) || 0;
+      (st.milestones || []).forEach(([k, v]) => triggeredMilestones.set(k, v));
+      if (st.wage) wageInput.value = st.wage;
+      if (st.currency) currencySelect.value = st.currency;
+      if (st.distraction) distractionSelect.value = st.distraction;
+      if (st.days) daysSelect.value = st.days;
+    } catch (e) { /* ignore corrupt data */ }
+  }
+
+  [currencySelect, distractionSelect, daysSelect, wageInput].forEach(el => el.addEventListener('change', saveState));
+  daysSelect.addEventListener('change', tick);
+  window.addEventListener('pagehide', saveState);
+  clearBtn.addEventListener('click', async () => {
+    try { localStorage.removeItem(STORE_KEY); } catch (e) {}
+    try { await fetch('/api/sessions', { method: 'DELETE' }); } catch (e) {}
+    location.reload();
+  });
+
+  // ---- Backend (Node.js + SQLite) ----
+  async function postSession(durationMs, wage) {
+    try {
+      await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          distraction: distractionSelect.value.split('|')[0],
+          wage: wage,
+          currency: currencyCode,
+          durationMs: durationMs
+        })
+      });
+    } catch (e) { /* backend not running: the timer still works */ }
+    loadHistory();
+  }
+
+  async function loadHistory() {
+    const summary = $('historySummary');
+    const body = document.querySelector('#historyTable tbody');
+    try {
+      const r = await fetch('/api/history');
+      if (!r.ok) throw new Error('bad response');
+      const h = await r.json();
+      summary.textContent =
+        'Today: ' + h.today.sessions + ' session(s), ' + formatClock(h.today.ms) + ', ' + formatMoney(h.today.cost, 2) +
+        '  |  Last 7 days: ' + h.week.sessions + ' session(s), ' + formatMoney(h.week.cost, 2);
+      body.textContent = '';
+      if (!h.recent.length) {
+        const tr = body.insertRow();
+        const td = tr.insertCell();
+        td.colSpan = 4;
+        td.textContent = 'No saved sessions yet. Press Reset after a session to save it.';
+        return;
+      }
+      h.recent.forEach(s => {
+        const tr = body.insertRow();
+        tr.insertCell().textContent = s.created_at.slice(0, 16);
+        tr.insertCell().textContent = s.distraction;
+        tr.insertCell().textContent = formatClock(s.duration_ms);
+        tr.insertCell().textContent = s.currency + ' ' + s.cost.toFixed(2);
+      });
+    } catch (e) {
+      summary.textContent = 'History is unavailable because the backend is not running. Run the project locally with "node server.js" to enable it.';
+    }
+  }
+
+  // initial paint
+  loadState();
+  loadHistory();
+  updateFlavor();
+  syncSliderFromInput();
+  setRunningUI(false);
+  statusLabel.textContent = 'Idle — not burning';
+  updateCurrency();
+  tick();
+})();
+</script>
+</body>
+</html>

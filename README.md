@@ -4,8 +4,6 @@
 
 Every second of distraction has a price tag. Enter your hourly wage, pick what is stealing your time, and watch the money burn live.
 
-> B.Tech (Computer Science and Engineering) mini project, Pranveer Singh Institute of Technology, Kanpur.
-
 ![Doom-Timer screenshot](screenshot.png)
 
 ## Features
@@ -83,7 +81,7 @@ The server calculates the cost itself from the duration and the wage, so saved v
 ## Public demo (GitHub Pages)
 
 GitHub Pages can only host static files, so the public demo at
-`https://YOUR-USERNAME.github.io/doom-timer/` runs the **timer and all visuals**, but the **session history needs the Node.js backend** and is only available when you run the project locally.
+`https://divyanshuvishwash.github.io/doom-timer/` runs the **timer and all visuals**, but the **session history needs the Node.js backend** and is only available when you run the project locally.
 
 ## Future scope
 
@@ -94,6 +92,4 @@ GitHub Pages can only host static files, so the public demo at
 
 ## Author
 
-**Divyanshu Vishwash** (Roll No: 2501640100369)
-Under the supervision of **Mr. Yash Sinha** (Assistant Professor)
-Pranveer Singh Institute of Technology, Kanpur
+**Divyanshu Vishwash** 
